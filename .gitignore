@@ -1,0 +1,27 @@
+# EDA Tool outputs
+*.vcd
+*.vvp
+*.log
+*.db
+*.lib
+*.syn
+
+# Simulation artifacts
+dump.vcd
+work/
+sim_build/
+
+# Synthesis outputs
+*.sdc
+*.sdf
+*.netlist
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.bak
+*~
+.vscode/
