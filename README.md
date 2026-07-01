@@ -181,6 +181,14 @@ sync_fifo/
 
 > Full waveform analysis: [docs/waveform_analysis.md](docs/waveform_analysis.md)
 
+### Simulation Waveforms (EPWave — EDA Playground)
+
+**Full Overview — All Signals**
+![Waveform Overview](docs/waveform_1.png)
+
+**Pointer & Data Detail — wr_ptr, rd_ptr, wr_data, wr_en**
+![Waveform Detail](docs/waveform_2.png)
+
 ### Phase 1 — Reset
 ```
 rst_n:  0 ──────────► 1
