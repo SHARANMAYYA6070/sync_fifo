@@ -179,31 +179,80 @@ sync_fifo/
 
 ## Waveform Analysis
 
-### Write Operation
+> Full waveform analysis: [docs/waveform_analysis.md](docs/waveform_analysis.md)
+
+### Phase 1 — Reset
 ```
-clk:      ____/‾\____/‾\____
-wr_en:    ____/‾‾‾‾‾‾‾\____
-wr_data:  ----[  DATA  ]----
-wr_ptr:        0 ──────► 1
-count:         0 ──────► 1
-full:          0            (was 0, still 0)
+rst_n:  0 ──────────► 1
+count:  X ──────────► 00   (cleared)
+empty:  X ──────────► 1    (FIFO starts empty)
+ptrs:   X ──────────► 0    (both pointers reset)
 ```
 
-### Read Operation (Combinational Output)
+### Phase 2 — Write 5 Values (Test 2)
 ```
-clk:      ____/‾\____/‾\____
-rd_en:    ____/‾‾‾‾‾‾‾\____
-rd_data:  --[VALID NOW]----  ← immediate (no clock needed)
-rd_ptr:              0 ──► 1
-count:         1 ──────► 0
+wr_data:  0x0A → 0x14 → 0x1E → 0x28 → 0x32
+           (10)    (20)    (30)    (40)    (50)
+count:     00  →   01  →   02  →   03  →   04  →  05
+wr_ptr:     0  →    1  →    2  →    3  →    4  →   5
 ```
 
-### Overflow Event
+### Phase 3 — Read 5 Values Back (FIFO order verified ✅)
 ```
-full:     ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-wr_en:    ____/‾\__________
-overflow: ____/‾\__________  ← pulse same cycle as illegal write
+rd_data:  0x0A → 0x14 → 0x1E → 0x28 → 0x32
+           (10)    (20)    (30)    (40)    (50)
+           ↑ Exact same order as written — FIFO confirmed!
+count:     05  →  04  →  03  →  02  →  01  →  00
+empty:  asserts immediately when count = 0
 ```
+
+### Phase 4 — Fill to Full (Test 3)
+```
+count:  00→01→02→...→0E→0F→10  (0 to 16)
+full:   ________________________/‾‾‾‾ asserts at count=0x10
+wr_ptr: 0→1→2→...→E→F→0  ← WRAP-AROUND at F→0 (natural 4-bit overflow)
+```
+
+### Phase 5 — Overflow Pulse (Test 4)
+```
+full:       ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+wr_en:      ___/‾\__________
+overflow:   ___/‾\__________  ← 1-cycle pulse only
+count:      stays at 0x10 (write safely blocked)
+wr_ptr:     does NOT advance (memory protected)
+```
+
+### Phase 6 — Drain to Empty (Test 5)
+```
+rd_data:  0x01→0x02→...→0x0F→0x10  (reads 1 to 16 in order ✅)
+count:    10→0F→0E→...→01→00
+rd_ptr:    0→ 1→ 2→...→ F→ 0  ← wraps back to 0
+empty:  asserts when count = 0x00
+```
+
+### Phase 7 — Underflow Pulse (Test 6)
+```
+empty:      ‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+rd_en:      ___/‾\__________
+underflow:  ___/‾\__________  ← 1-cycle pulse
+rd_ptr:     does NOT advance (protected)
+```
+
+### Phase 8 — Simultaneous Read+Write (Test 7)
+```
+wr_en=1, rd_en=1 at same clock edge:
+  count:   UNCHANGED (one in, one out)
+  wr_ptr:  advances +1
+  rd_ptr:  advances +1
+  No data loss, no corruption ✅
+```
+
+### Key Waveform Observations
+- **X-states before reset:** Correct — no accidental RTL initialization
+- **Pointer wrap-around:** Both `wr_ptr` and `rd_ptr` visibly wrap F→0
+- **Combinational `rd_data`:** Changes without waiting for clock edge
+- **count bit[4]:** Goes high ONLY at count=16 — confirms 5-bit necessity
+- **Flag timing:** `full` and `empty` are purely combinational — same-cycle response
 
 ---
 
