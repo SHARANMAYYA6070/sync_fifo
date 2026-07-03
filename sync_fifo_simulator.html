@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synchronous FIFO Simulator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:'Courier New',monospace;min-height:100vh;padding:20px}
+.header{text-align:center;margin-bottom:24px;padding:20px;background:#161b22;border:1px solid #30363d;border-radius:12px}
+.header h1{font-size:22px;color:#58a6ff;letter-spacing:3px;margin-bottom:6px}
+.header p{font-size:12px;color:#8b949e;line-height:1.8}
+.badge-row{display:flex;justify-content:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.badge{padding:3px 12px;border-radius:20px;font-size:11px;font-weight:bold}
+.b-blue{background:#0c2d6b;color:#58a6ff;border:1px solid #58a6ff}
+.b-green{background:#196c2e;color:#3fb950;border:1px solid #3fb950}
+.b-purple{background:#3a1f6b;color:#d2a8ff;border:1px solid #d2a8ff}
+.b-yellow{background:#3d2f0a;color:#e3b341;border:1px solid #e3b341}
+.main{display:grid;grid-template-columns:1fr 280px;gap:16px;max-width:920px;margin:0 auto}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px}
+.section-title{font-size:10px;color:#8b949e;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #21262d}
+/* Memory Grid */
+.memory-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.cell{background:#0d1117;border:1px solid #21262d;border-radius:7px;padding:9px 5px;text-align:center;position:relative;transition:all 0.3s ease;min-height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default}
+.cell-index{font-size:9px;color:#484f58;margin-bottom:3px}
+.cell-data{font-size:15px;font-weight:bold;color:#30363d;font-family:'Courier New',monospace}
+.cell.has-data .cell-data{color:#e6edf3}
+.cell.wr{border-color:#3fb950;background:#071a0d;box-shadow:0 0 10px rgba(63,185,80,0.25)}
+.cell.rd{border-color:#58a6ff;background:#06121f;box-shadow:0 0 10px rgba(88,166,255,0.25)}
+.cell.both{border-color:#e3b341;background:#1a170a;box-shadow:0 0 10px rgba(227,179,65,0.25)}
+.ptr-tags{display:flex;gap:3px;justify-content:center;margin-top:4px;min-height:15px}
+.ptag{font-size:8px;font-weight:bold;padding:1px 5px;border-radius:3px}
+.ptag-w{background:#3fb950;color:#0d1117}
+.ptag-r{background:#58a6ff;color:#0d1117}
+.ptag-b{background:#e3b341;color:#0d1117}
+@keyframes flashW{0%{background:#0f4a1f;box-shadow:0 0 20px rgba(63,185,80,0.6)}100%{background:#071a0d}}
+@keyframes flashR{0%{background:#0c2a50;box-shadow:0 0 20px rgba(88,166,255,0.6)}100%{background:#06121f}}
+@keyframes flashErr{0%{background:#4a0c0c;box-shadow:0 0 20px rgba(248,81,73,0.6)}100%{background:#0d1117}}
+.cell.fw{animation:flashW 0.5s ease forwards}
+.cell.fr{animation:flashR 0.5s ease forwards}
+.cell.ferr{animation:flashErr 0.5s ease forwards}
+/* Pointer bar */
+.ptr-bar{display:flex;justify-content:space-around;margin-top:14px;padding-top:14px;border-top:1px solid #21262d}
+.ptr-box{text-align:center}
+.ptr-label{font-size:10px;color:#8b949e;margin-bottom:4px}
+.ptr-val{font-size:24px;font-weight:bold}
+.pv-w{color:#3fb950}.pv-r{color:#58a6ff}.pv-c{color:#e6edf3}
+/* Count bar */
+.cbar-wrap{margin-top:10px}
+.cbar-label{display:flex;justify-content:space-between;font-size:10px;color:#8b949e;margin-bottom:4px}
+.cbar-track{background:#21262d;border-radius:4px;height:10px;overflow:hidden}
+.cbar-fill{height:100%;border-radius:4px;transition:width 0.3s ease,background 0.3s ease;background:#3fb950}
+/* Flags */
+.flags-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.flag{border:1px solid #21262d;border-radius:8px;padding:12px 8px;text-align:center;transition:all 0.3s ease}
+.flag-led{width:10px;height:10px;border-radius:50%;background:#21262d;margin:0 auto 6px;transition:all 0.3s ease}
+.flag-name{font-size:9px;color:#484f58;letter-spacing:1px;font-weight:bold}
+/* Flag states */
+.flag.f-full.on{border-color:#f85149;background:#1a0808}
+.flag.f-full.on .flag-led{background:#f85149;box-shadow:0 0 8px #f85149}
+.flag.f-full.on .flag-name{color:#f85149}
+.flag.f-empty.on{border-color:#e3b341;background:#1a1608}
+.flag.f-empty.on .flag-led{background:#e3b341;box-shadow:0 0 8px #e3b341}
+.flag.f-empty.on .flag-name{color:#e3b341}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.flag.f-ovf.on{border-color:#f85149;background:#1a0808}
+.flag.f-ovf.on .flag-led{background:#f85149;box-shadow:0 0 10px #f85149;animation:blink 0.4s ease 2}
+.flag.f-ovf.on .flag-name{color:#f85149}
+.flag.f-udf.on{border-color:#f85149;background:#1a0808}
+.flag.f-udf.on .flag-led{background:#f85149;box-shadow:0 0 10px #f85149;animation:blink 0.4s ease 2}
+.flag.f-udf.on .flag-name{color:#f85149}
+/* Controls */
+.inp-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.inp-lbl{font-size:10px;color:#8b949e;min-width:38px}
+.inp{flex:1;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 10px;color:#e6edf3;font-family:'Courier New',monospace;font-size:14px;text-transform:uppercase}
+.inp:focus{outline:none;border-color:#58a6ff}
+.btn{width:100%;padding:10px;border:none;border-radius:7px;font-family:'Courier New',monospace;font-size:12px;font-weight:bold;cursor:pointer;letter-spacing:1px;transition:all 0.2s;margin-bottom:7px}
+.btn:active{transform:scale(0.97)}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.b-wr{background:#196c2e;color:#3fb950;border:1px solid #3fb950}.b-wr:hover:not(:disabled){background:#1f7a34}
+.b-rd{background:#0c2d6b;color:#58a6ff;border:1px solid #58a6ff}.b-rd:hover:not(:disabled){background:#0f3580}
+.b-rst{background:#3d1a1a;color:#f85149;border:1px solid #f85149}.b-rst:hover:not(:disabled){background:#4a2020}
+.b-demo{background:#3a1f6b;color:#d2a8ff;border:1px solid #d2a8ff}.b-demo:hover:not(:disabled){background:#45257a}
+.status-box{background:#0d1117;border:1px solid #21262d;border-radius:7px;padding:10px;font-size:11px;color:#8b949e;line-height:1.6;margin-top:10px;min-height:48px}
+/* Log */
+.log-wrap{max-width:920px;margin:14px auto 0}
+.log-list{max-height:150px;overflow-y:auto}
+.log-entry{font-size:11px;padding:5px 0;border-bottom:1px solid #21262d;display:flex;gap:10px;align-items:baseline}
+.le-t{color:#484f58;min-width:28px;font-size:10px}
+.le-op{font-weight:bold;min-width:72px;font-size:11px}
+.op-write{color:#3fb950}.op-read{color:#58a6ff}.op-reset{color:#f85149}.op-overflow{color:#f85149}.op-underflow{color:#f85149}.op-demo{color:#d2a8ff}
+.le-d{color:#e6edf3;min-width:36px}
+.le-m{color:#8b949e}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0d1117}::-webkit-scrollbar-thumb{background:#30363d;border-radius:2px}
+/* RTL explanation panel */
+.explain-box{background:#0d1117;border:1px solid #21262d;border-radius:7px;padding:10px;font-size:11px;color:#8b949e;line-height:1.7;margin-top:10px}
+.explain-box strong{color:#e6edf3}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ SYNCHRONOUS FIFO SIMULATOR</h1>
+  <p>Interactive animated simulation of a parameterized Synchronous FIFO<br>
+     Designed and verified by <strong style="color:#58a6ff">SHARANMAYYA6070</strong> — RTL Design &amp; Verification Project</p>
+  <div class="badge-row">
+    <span class="badge b-blue">Depth: 16</span>
+    <span class="badge b-green">Width: 8-bit</span>
+    <span class="badge b-purple">Counter-based detection</span>
+    <span class="badge b-yellow">Combinational read</span>
+    <span class="badge b-blue">SystemVerilog</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Left: Memory -->
+  <div class="card">
+    <div class="section-title">Memory Array — 16 × 8-bit Circular Buffer</div>
+    <div class="memory-grid" id="memGrid"></div>
+
+    <div class="ptr-bar">
+      <div class="ptr-box">
+        <div class="ptr-label">WR_PTR <span style="color:#3fb950">■</span></div>
+        <div class="ptr-val pv-w" id="vWr">0</div>
+      </div>
+      <div class="ptr-box">
+        <div class="ptr-label">RD_PTR <span style="color:#58a6ff">■</span></div>
+        <div class="ptr-val pv-r" id="vRd">0</div>
+      </div>
+      <div class="ptr-box">
+        <div class="ptr-label">COUNT</div>
+        <div class="ptr-val pv-c" id="vCnt">0 / 16</div>
+      </div>
+    </div>
+
+    <div class="cbar-wrap">
+      <div class="cbar-label">
+        <span>0 (EMPTY)</span>
+        <span id="cbarLabel">0 entries</span>
+        <span>16 (FULL)</span>
+      </div>
+      <div class="cbar-track">
+        <div class="cbar-fill" id="cbarFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="explain-box" id="explainBox">
+      <strong>Ready.</strong> The 16 memory slots are empty. WR_PTR and RD_PTR both start at slot [00].
+      Press <strong style="color:#3fb950">WRITE</strong> to add data or <strong style="color:#d2a8ff">AUTO DEMO</strong> to watch all scenarios automatically.
+    </div>
+  </div>
+
+  <!-- Right: Flags + Controls -->
+  <div style="display:flex;flex-direction:column;gap:14px">
+
+    <div class="card">
+      <div class="section-title">Status Flags</div>
+      <div class="flags-grid">
+        <div class="flag f-full" id="fFull">
+          <div class="flag-led"></div>
+          <div class="flag-name">FULL</div>
+        </div>
+        <div class="flag f-empty on" id="fEmpty">
+          <div class="flag-led"></div>
+          <div class="flag-name">EMPTY</div>
+        </div>
+        <div class="flag f-ovf" id="fOvf">
+          <div class="flag-led"></div>
+          <div class="flag-name">OVERFLOW</div>
+        </div>
+        <div class="flag f-udf" id="fUdf">
+          <div class="flag-led"></div>
+          <div class="flag-name">UNDERFLOW</div>
+        </div>
+      </div>
+      <div class="section-title" style="margin-top:6px">RTL Equations</div>
+      <div style="font-size:10px;color:#8b949e;line-height:2">
+        <span style="color:#3fb950">full</span> = (count == 16)<br>
+        <span style="color:#e3b341">empty</span> = (count == 0)<br>
+        <span style="color:#f85149">overflow</span> = wr_en &amp; full<br>
+        <span style="color:#f85149">underflow</span> = rd_en &amp; empty
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Controls</div>
+      <div class="inp-row">
+        <span class="inp-lbl">DATA:</span>
+        <input class="inp" id="dataIn" type="text" value="A5" maxlength="2" placeholder="HEX">
+      </div>
+      <button class="btn b-wr" onclick="doWrite()">▶ WRITE (wr_en = 1)</button>
+      <button class="btn b-rd" onclick="doRead()">◀ READ (rd_en = 1)</button>
+      <button class="btn b-rst" onclick="doReset()">↺ RESET (rst_n = 0→1)</button>
+      <button class="btn b-demo" id="demoBtn" onclick="runDemo()">▶▶ AUTO DEMO — ALL SCENARIOS</button>
+      <div class="status-box" id="statusBox">Press WRITE, READ, or AUTO DEMO to begin.</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Log -->
+<div class="log-wrap">
+  <div class="card">
+    <div class="section-title">Operation Log — Cycle-by-Cycle</div>
+    <div class="log-list" id="logList"></div>
+  </div>
+</div>
+
+<script>
+const DEPTH = 16;
+let mem = new Array(DEPTH).fill(null);
+let wr_ptr = 0, rd_ptr = 0, count = 0, cycle = 0;
+let ovf = false, udf = false;
+
+function buildGrid(){
+  const g = document.getElementById('memGrid');
+  g.innerHTML = '';
+  for(let i=0;i<DEPTH;i++){
+    const c = document.createElement('div');
+    c.className = 'cell';
+    c.id = 'c'+i;
+    c.innerHTML = `<div class="cell-index">[${String(i).padStart(2,'0')}]</div>
+<div class="cell-data" id="d${i}">--</div>
+<div class="ptr-tags" id="t${i}"></div>`;
+    g.appendChild(c);
+  }
+}
+
+function renderGrid(){
+  for(let i=0;i<DEPTH;i++){
+    const cell = document.getElementById('c'+i);
+    const dEl  = document.getElementById('d'+i);
+    const tEl  = document.getElementById('t'+i);
+    let cls = 'cell';
+    let tags = '';
+    const isW = i===wr_ptr, isR = i===rd_ptr;
+    if(isW&&isR){ cls+=' both'; tags='<span class="ptag ptag-b">WR RD</span>'; }
+    else if(isW){ cls+=' wr';   tags='<span class="ptag ptag-w">WR</span>'; }
+    else if(isR){ cls+=' rd';   tags='<span class="ptag ptag-r">RD</span>'; }
+    if(mem[i]!==null) cls+=' has-data';
+    cell.className = cls;
+    dEl.textContent = mem[i]!==null ? mem[i].toString(16).toUpperCase().padStart(2,'0') : '--';
+    tEl.innerHTML = tags;
+  }
+  document.getElementById('vWr').textContent = wr_ptr;
+  document.getElementById('vRd').textContent = rd_ptr;
+  document.getElementById('vCnt').textContent = count+' / 16';
+  const pct = (count/DEPTH)*100;
+  const bar = document.getElementById('cbarFill');
+  bar.style.width = pct+'%';
+  bar.style.background = pct<50?'#3fb950':pct<87.5?'#e3b341':'#f85149';
+  document.getElementById('cbarLabel').textContent = count+' entr'+(count===1?'y':'ies');
+  setFlag('fFull', count===DEPTH, 'f-full');
+  setFlag('fEmpty', count===0, 'f-empty');
+  setFlag('fOvf', ovf, 'f-ovf');
+  setFlag('fUdf', udf, 'f-udf');
+}
+
+function setFlag(id,on,cls){
+  const el = document.getElementById(id);
+  el.className = 'flag '+cls+(on?' on':'');
+}
+
+function flash(idx,type){
+  const c = document.getElementById('c'+idx);
+  c.classList.add(type);
+  setTimeout(()=>c.classList.remove(type),600);
+}
+
+function setStatus(msg,color){
+  const b = document.getElementById('statusBox');
+  b.innerHTML = msg;
+  b.style.color = color||'#8b949e';
+}
+
+function setExplain(msg){
+  document.getElementById('explainBox').innerHTML = msg;
+}
+
+function addLog(op,data,msg){
+  cycle++;
+  const list = document.getElementById('logList');
+  const e = document.createElement('div');
+  e.className='log-entry';
+  e.innerHTML=`<span class="le-t">#${cycle}</span>
+<span class="le-op op-${op}">${op.toUpperCase()}</span>
+<span class="le-d">${data}</span>
+<span class="le-m">${msg}</span>`;
+  list.insertBefore(e,list.firstChild);
+}
+
+function getInputVal(){
+  let v = parseInt(document.getElementById('dataIn').value,16);
+  if(isNaN(v)) v=0xAA;
+  return v&0xFF;
+}
+
+function doWrite(){
+  ovf=false; udf=false;
+  const val = getInputVal();
+  const hex = '0x'+val.toString(16).toUpperCase().padStart(2,'0');
+  if(count===DEPTH){
+    ovf=true;
+    flash(wr_ptr,'ferr');
+    setStatus(`⚠️ <strong style="color:#f85149">OVERFLOW!</strong> wr_en=1 but full=1. Write ${hex} REJECTED.`,'#f85149');
+    setExplain(`<strong style="color:#f85149">OVERFLOW detected.</strong> wr_en=1 but FIFO is full (count=16).<br>
+<strong>assign overflow = wr_en &amp; full = 1 &amp; 1 = 1</strong><br>
+Data ${hex} is dropped. wr_ptr does NOT advance. Memory is protected.`);
+    addLog('overflow',hex,`FIFO full — write blocked | wr_ptr stays at ${wr_ptr}`);
+  } else {
+    const target = wr_ptr;
+    mem[wr_ptr] = val;
+    wr_ptr = (wr_ptr+1)%DEPTH;
+    count++;
+    flash(target,'fw');
+    setStatus(`✅ <strong style="color:#3fb950">WRITE OK.</strong> ${hex} → mem[${target}]. wr_ptr: ${target} → ${wr_ptr}. count: ${count-1} → ${count}.`,'#3fb950');
+    setExplain(`<strong style="color:#3fb950">WRITE operation.</strong> wr_en=1, full=0 → valid write.<br>
+mem[<strong>${target}</strong>] ← ${hex} &nbsp;|&nbsp; wr_ptr: <strong>${target} → ${wr_ptr}</strong> (${wr_ptr===0?'WRAP-AROUND! '+target+' + 1 = 0 (4-bit overflow)':'natural increment'})<br>
+count: <strong>${count-1} → ${count}</strong>${count===DEPTH?' → FULL flag asserts!':''}`);
+    addLog('write',hex,`mem[${target}] ← ${hex} | wr_ptr→${wr_ptr} | count=${count}${count===DEPTH?' | FULL!':''}`);
+    // auto-increment
+    const nv=(val+1)&0xFF;
+    document.getElementById('dataIn').value=nv.toString(16).toUpperCase().padStart(2,'0');
+  }
+  renderGrid();
+}
+
+function doRead(){
+  ovf=false; udf=false;
+  if(count===0){
+    udf=true;
+    flash(rd_ptr,'ferr');
+    setStatus(`⚠️ <strong style="color:#f85149">UNDERFLOW!</strong> rd_en=1 but empty=1. Nothing to read.`,'#f85149');
+    setExplain(`<strong style="color:#f85149">UNDERFLOW detected.</strong> rd_en=1 but FIFO is empty (count=0).<br>
+<strong>assign underflow = rd_en &amp; empty = 1 &amp; 1 = 1</strong><br>
+rd_ptr does NOT advance. No garbage data is output.`);
+    addLog('underflow','--',`FIFO empty — read blocked | rd_ptr stays at ${rd_ptr}`);
+  } else {
+    const src = rd_ptr;
+    const data = mem[src];
+    const hex = '0x'+data.toString(16).toUpperCase().padStart(2,'0');
+    rd_ptr = (rd_ptr+1)%DEPTH;
+    count--;
+    flash(src,'fr');
+    setStatus(`✅ <strong style="color:#58a6ff">READ OK.</strong> mem[${src}] → ${hex}. rd_ptr: ${src} → ${rd_ptr}. count: ${count+1} → ${count}.`,'#58a6ff');
+    setExplain(`<strong style="color:#58a6ff">READ operation.</strong> rd_en=1, empty=0 → valid read.<br>
+rd_data = mem[<strong>${src}</strong>] = ${hex} (combinational — zero latency!)<br>
+rd_ptr: <strong>${src} → ${rd_ptr}</strong>${rd_ptr===0?' (WRAP-AROUND!)':''} &nbsp;|&nbsp; count: <strong>${count+1} → ${count}</strong>${count===0?' → EMPTY flag asserts!':''}`);
+    addLog('read',hex,`mem[${src}] → ${hex} | rd_ptr→${rd_ptr} | count=${count}${count===0?' | EMPTY!':''}`);
+  }
+  renderGrid();
+}
+
+function doReset(){
+  mem=new Array(DEPTH).fill(null);
+  wr_ptr=0; rd_ptr=0; count=0; cycle=0; ovf=false; udf=false;
+  document.getElementById('logList').innerHTML='';
+  setStatus('↺ <strong style="color:#f85149">RESET applied.</strong> rst_n=0→1. All pointers cleared. count=0.','#f85149');
+  setExplain(`<strong>RESET (rst_n = 0 → 1).</strong> Synchronous reset on posedge clk.<br>
+wr_ptr ← 0 &nbsp;|&nbsp; rd_ptr ← 0 &nbsp;|&nbsp; count ← 0<br>
+<strong>Note:</strong> Memory contents are NOT reset — only pointers and count. The empty flag prevents reading garbage.`);
+  addLog('reset','--','rst_n=0→1 | wr_ptr=0 | rd_ptr=0 | count=0');
+  renderGrid();
+}
+
+let demoRunning=false;
+async function runDemo(){
+  if(demoRunning)return;
+  demoRunning=true;
+  const btn=document.getElementById('demoBtn');
+  btn.disabled=true;
+  btn.textContent='⏳ DEMO RUNNING...';
+  const delay=ms=>new Promise(r=>setTimeout(r,ms));
+
+  doReset();
+  await delay(700);
+
+  // Phase 1: Write 5
+  setExplain(`<strong style="color:#d2a8ff">AUTO DEMO — Phase 1:</strong> Writing 5 values (0x0A, 0x14, 0x1E, 0x28, 0x32). Watch wr_ptr advance and count increase.`);
+  await delay(600);
+  for(const v of [0x0A,0x14,0x1E,0x28,0x32]){
+    document.getElementById('dataIn').value=v.toString(16).toUpperCase().padStart(2,'0');
+    doWrite(); await delay(650);
+  }
+  await delay(400);
+
+  // Phase 2: Read 3
+  setExplain(`<strong style="color:#d2a8ff">AUTO DEMO — Phase 2:</strong> Reading 3 values. Watch FIFO ordering — first written = first read (0x0A → 0x14 → 0x1E).`);
+  await delay(600);
+  for(let i=0;i<3;i++){ doRead(); await delay(650); }
+  await delay(400);
+
+  // Phase 3: Fill to full
+  setExplain(`<strong style="color:#d2a8ff">AUTO DEMO — Phase 3:</strong> Writing until FULL. Watch count reach 16, full flag light up, and wr_ptr WRAP-AROUND (15 → 0).`);
+  await delay(600);
+  let v=0x01;
+  while(count<DEPTH){
+    document.getElementById('dataIn').value=v.toString(16).toUpperCase().padStart(2,'0');
+    doWrite(); v=(v+1)&0xFF; await delay(200);
+  }
+  await delay(600);
+
+  // Phase 4: Overflow
+  setExplain(`<strong style="color:#d2a8ff">AUTO DEMO — Phase 4:</strong> Attempting OVERFLOW — writing 0x99 when FULL. Watch overflow flag flash and write get blocked.`);
+  await delay(500);
+  document.getElementById('dataIn').value='99';
+  doWrite(); await delay(900);
+  ovf=false; renderGrid(); await delay(400);
+
+  // Phase 5: Drain
+  setExplain(`<strong style="color:#d2a8ff">AUTO DEMO — Phase 5:</strong> Draining to EMPTY. Watch count go 16 → 0, rd_ptr wrap-around, and empty flag assert.`);
+  await delay(600);
+  while(count>0){ doRead(); await delay(180); }
+  await delay(600);
+
+  // Phase 6: Underflow
+  setExplain(`<strong style="color:#d2a8ff">AUTO DEMO — Phase 6:</strong> Attempting UNDERFLOW — reading when EMPTY. Watch underflow flag flash and read get blocked.`);
+  await delay(500);
+  doRead(); await delay(900);
+  udf=false; renderGrid();
+
+  setExplain(`<strong style="color:#3fb950">✅ AUTO DEMO COMPLETE!</strong> All scenarios verified:<br>
+Write ✅ &nbsp; Read ✅ &nbsp; FIFO Ordering ✅ &nbsp; Full flag ✅ &nbsp; Overflow ✅ &nbsp; Empty flag ✅ &nbsp; Underflow ✅ &nbsp; Pointer wrap-around ✅`);
+  setStatus('✅ <strong style="color:#3fb950">All 8 scenarios demonstrated successfully!</strong>','#3fb950');
+
+  btn.disabled=false;
+  btn.textContent='▶▶ AUTO DEMO — ALL SCENARIOS';
+  demoRunning=false;
+}
+
+buildGrid();
+doReset();
+</script>
+</body>
+</html>

@@ -91,19 +91,34 @@ Both write and read ports share a **single clock domain**. The design uses a **c
 
 ---
 
+## Interactive Simulators
+
+Two browser-based FIFO simulators — no EDA tool required. Open directly in Chrome or Edge.
+
+| File | Description |
+|------|-------------|
+| 🎮 [Synchronous FIFO Simulator.html](Synchronous%20FIFO%20Simulator.html) | Animated React app — rich graphics, full FIFO visualization |
+| ⚡ [sync_fifo_simulator.html](sync_fifo_simulator.html) | Lightweight HTML/JS simulator — 16-slot grid, pointer LEDs, Write/Read/Reset/AUTO DEMO buttons, RTL explanation panel per operation |
+
+---
+
 ## File Structure
 
 ```
 sync_fifo/
 ├── rtl/
-│   └── sync_fifo.sv          # Synthesizable RTL design
+│   └── sync_fifo.sv              # Synthesizable RTL design
 ├── tb/
-│   ├── tb_sync_fifo.sv       # Self-checking testbench (8 tests)
-│   └── sync_fifo_sva.sv      # SystemVerilog Assertions (8 checks)
+│   ├── tb_sync_fifo.sv           # Self-checking testbench (8 tests)
+│   └── sync_fifo_sva.sv          # SystemVerilog Assertions (8 checks)
 ├── coverage/
-│   └── sync_fifo_coverage.sv # Functional coverage (5 covergroups)
+│   └── sync_fifo_coverage.sv     # Functional coverage (5 covergroups)
 ├── docs/
-│   └── (add waveform screenshots here)
+│   ├── waveform_analysis.md      # Phase-by-phase waveform analysis
+│   ├── waveform_1.png            # EPWave screenshot — full overview
+│   └── waveform_2.png            # EPWave screenshot — pointer detail
+├── sync_fifo_simulator.html      # ← Interactive animated FIFO simulator
+├── push_to_github.ps1            # PowerShell GitHub push script
 ├── .gitignore
 └── README.md
 ```
