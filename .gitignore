@@ -11,10 +11,20 @@ dump.vcd
 work/
 sim_build/
 
-# Synthesis outputs
-*.sdc
+# Synthesis outputs (generated files — run synthesis locally)
+synthesis/sync_fifo_synth.v
 *.sdf
 *.netlist
+
+# GLS compiled binary
+gls/gls_sim
+
+# Large sky130 PDK files (too big for GitHub — download separately)
+lib/
+verilog_model/
+
+# OpenLANE run outputs (very large)
+openlane/runs/
 
 # OS files
 .DS_Store
