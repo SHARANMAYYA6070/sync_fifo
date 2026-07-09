@@ -29,8 +29,17 @@ if [ ! -f "lib/sky130_fd_sc_hd__tt_025C_1v80.lib" ]; then
     exit 1
 fi
 
-# Run Yosys with our TCL script
-yosys -s synthesis/yosys_run.tcl 2>&1 | tee synthesis/yosys_run.log
+# Run Yosys with inline commands (heredoc — no TCL puts issue)
+yosys << 'YOSYS_EOF' 2>&1 | tee synthesis/yosys_run.log
+read_verilog -sv rtl/sync_fifo.sv
+hierarchy -check -top sync_fifo
+synth -top sync_fifo
+dfflibmap -liberty lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+abc -liberty lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+clean
+write_verilog -noattr synthesis/sync_fifo_synth.v
+stat -liberty lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+YOSYS_EOF
 
 echo ""
 echo "Log saved to: synthesis/yosys_run.log"
